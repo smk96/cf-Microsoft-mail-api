@@ -34,6 +34,7 @@
  *   API_BASE_URL默认为https://msoauth.unix.xin/ 您也可以自行部署，项目是https://github.com/HChaoHui/msOauth2api
  *   本项目使用 Cloudflare Workers 的 KV 存储来存储账号信息，您需要在部署前创建 KV 命名空间并将其绑定到 Worker。
  *   为了安全起见，请妥善保管您的账号信息，不要将其泄露给他人。
+ *   KV空间变量名称为ACCOUNTS，KV空间值随便
 
  **免责声明:**
 
