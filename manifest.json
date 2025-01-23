@@ -1,0 +1,20 @@
+{
+  "short_name": "邮箱客户端",
+  "name": "微软邮箱 API 客户端",
+  "icons": [
+    {
+      "src": "https://img.xwyue.com/i/2025/01/23/6791c8b24239a.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://img.xwyue.com/i/2025/01/23/6791c8b24239a.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff"
+}
