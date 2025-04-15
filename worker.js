@@ -1,5 +1,5 @@
 // KV Namespace 绑定
-const API_BASE_URL = 'https://msoauth.unix.xin/api';
+const API_BASE_URL = 'https://2api.sumo.zone.id/api';
 const allowedMailboxes = ['INBOX', 'Junk'];
 
 // Logo URL
@@ -194,6 +194,7 @@ const indexHTML = `
     <div class="container">
         <div class="manage-link">
             <a href="/manage" target="_blank">管理账号</a>
+            <span id="accountCount"></span>
         </div>
         <div id="accounts"></div>
     </div>
@@ -205,13 +206,19 @@ const indexHTML = `
             const accounts = await response.json();
             const accountsDiv = document.getElementById('accounts');
             accountsDiv.innerHTML = '';
-
+            
+            // 添加账号总数显示
+            const accountCount = Object.keys(accounts).length;
+            document.getElementById('accountCount').textContent = \` (共 \${accountCount} 个账号)\`;
+            
+            // 添加带序号的账号
+            let index = 1;
             for (const email in accounts) {
                 const account = accounts[email];
                 const accountDiv = document.createElement('div');
                 accountDiv.classList.add('account');
                 accountDiv.innerHTML = \`
-                    <h2 onclick="copyToClipboard('\${email}', event)" title="点击复制">\${email}</h2>
+                    <h2 onclick="copyToClipboard('\${email}', event)" title="点击复制">\${index}. \${email}</h2>
                     <div class="actions">
                         <button class="btn-primary" onclick="openApiUrl('\${email}', 'INBOX', 'new')">获取新邮件 (收件箱)</button>
                         <button class="btn-primary" onclick="openApiUrl('\${email}', 'Junk', 'new')">获取新邮件 (垃圾邮件)</button>
@@ -223,6 +230,7 @@ const indexHTML = `
                     <div class="copy-message"></div>
                 \`;
                 accountsDiv.appendChild(accountDiv);
+                index++;
             }
         }
 
@@ -361,7 +369,7 @@ const manageHTML = `
         }
 
         .back-link a {
-            color: var(--accent-color);
+            color: var (--accent-color);
             text-decoration: none;
             font-size: 0.9rem; /* Smaller back link font */
         }
@@ -483,10 +491,10 @@ const manageHTML = `
             <a href="/">返回邮箱 API 客户端</a>
         </div>
         <div class="import-area">
-            <h2>一键导入</h2>
+            <h2>账号导入</h2>
             <label for="delimiter">分隔符:</label>
             <input type="text" id="delimiter" placeholder="默认为 ----">
-            <textarea id="importText" placeholder="粘贴导入字符串，例如：email----password----clientId----refreshToken" rows="4"></textarea>
+            <textarea id="importText" placeholder="粘贴导入字符串，每行一个账号，例如：email----password----clientId----refreshToken&#10;支持批量导入，每个账号占一行" rows="6"></textarea>
             <button onclick="importAccount()" class="btn-primary">导入账号</button>
         </div>
         <div class="add-account-form">
@@ -580,8 +588,27 @@ const manageHTML = `
         function importAccount() {
             const importText = document.getElementById('importText').value;
             const delimiter = document.getElementById('delimiter').value || '----';
-            const parts = importText.split(delimiter);
-
+            
+            // 分割每一行作为单独的账号
+            const lines = importText.trim().split('\\n').filter(line => line.trim() !== '');
+            
+            if (lines.length === 0) {
+                alert('请输入有效的账号信息');
+                return;
+            }
+            
+            if (lines.length === 1) {
+                // 单个账号导入
+                processSingleAccount(lines[0], delimiter);
+            } else {
+                // 批量导入
+                processMultipleAccounts(lines, delimiter);
+            }
+        }
+        
+        function processSingleAccount(accountStr, delimiter) {
+            const parts = accountStr.split(delimiter);
+            
             if (parts.length >= 4) {
                 const email = parts[0];
                 const clientId = parts[2];
@@ -590,12 +617,94 @@ const manageHTML = `
                 document.getElementById('email').value = email;
                 document.getElementById('client_id').value = clientId;
                 document.getElementById('refresh_token').value = refreshToken;
-                alert('账号信息已填充到表单，请点击“添加账号”按钮提交。');
+                alert('账号信息已填充到表单，请点击"添加账号"按钮提交。');
             } else {
                 alert('导入格式不正确，请检查示例格式和分隔符设置。');
             }
         }
+        
+        async function processMultipleAccounts(accountLines, delimiter) {
+            let successCount = 0;
+            let failCount = 0;
+            let errors = [];
+            const totalAccounts = accountLines.length;
+            
+            // 创建导入状态元素
+            const statusDiv = document.createElement('div');
+            statusDiv.style.marginTop = '10px';
+            statusDiv.style.padding = '10px';
+            statusDiv.style.backgroundColor = 'var(--card-bg)';
+            statusDiv.style.border = '1px solid var(--card-border)';
+            statusDiv.style.borderRadius = '0.3rem';
+            statusDiv.innerHTML = "<p>正在导入 " + totalAccounts + " 个账号...</p>";
+            document.querySelector('.import-area').appendChild(statusDiv);
+            
+            // 创建所有导入任务的数组
+            const importTasks = accountLines.map(async (line, index) => {
+                const parts = line.split(delimiter);
+                
+                if (parts.length >= 4) {
+                    const email = parts[0].trim();
+                    const clientId = parts[2].trim();
+                    const refreshToken = parts[3].trim();
+                    
+                    try {
+                        const response = await fetch('/manage', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                email: email,
+                                refresh_token: refreshToken,
+                                client_id: clientId
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            return { success: true, email, index };
+                        } else {
+                            const error = await response.text();
+                            return { success: false, email, error, index };
+                        }
+                    } catch (error) {
+                        return { success: false, email, error: error.message, index };
+                    }
+                } else {
+                    return { success: false, error: '格式错误', line, index };
+                }
+            });
+            
+            // 并行处理所有导入任务
+            const results = await Promise.all(importTasks);
+            
+            // 处理结果
+            for (const result of results) {
+                if (result.success) {
+                    successCount++;
+                } else {
+                    failCount++;
+                    errors.push("#" + (result.index + 1) + " " + (result.email || result.line) + ": " + result.error);
 
+                }
+            }
+            
+            if (successCount > 0) {
+                loadAccounts(); // 重新加载账号列表
+            }
+            
+            // 移除状态元素
+            document.querySelector('.import-area').removeChild(statusDiv);
+            
+            let message = \`导入完成：共 \${totalAccounts} 个账号\\n\`;
+            message += \`✅ 成功: \${successCount} 个\\n\`;
+            if (failCount > 0) {
+                message += \`❌ 失败: \${failCount} 个\\n\\n\`;
+                message += errors.join('\\n');
+            }
+            
+            alert(message);
+        }
 
         loadAccounts();
     </script>
